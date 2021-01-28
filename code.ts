@@ -30,9 +30,14 @@ const components = getVariants().map((variant) => {
   const { width, height } = variant[0];
   component.resizeWithoutConstraints(width, height);
   for (const value of variant) {
-    component.appendChild(value.clone());
+    const clone = value.clone();
+    clone.x = 0;
+    clone.y = 0;
+    component.appendChild(clone);
   }
   component.name = variant.map((value) => value.name).join(" / ");
+  component.x = 0;
+  component.y = 0;
   return component;
 });
 
