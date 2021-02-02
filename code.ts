@@ -1,7 +1,9 @@
 figma.showUI(__html__, { width: 200, height: 100 });
 
 async function rasterize(node, scale) {
-  const { width, height } = node;
+  let { width, height } = node;
+  width *= scale;
+  height *= scale;
   const frame = figma.createFrame();
   frame.name = node.name;
   frame.resizeWithoutConstraints(width, height);
@@ -53,9 +55,7 @@ figma.ui.onmessage = async (message) => {
 
   const components = getVariants().map((variant) => {
     const component = figma.createComponent();
-    let { width, height } = variant[0];
-    width *= scale;
-    height *= scale;
+    const { width, height } = variant[0];
     component.resizeWithoutConstraints(width, height);
     for (const value of variant) {
       const clone = value.clone();
@@ -66,6 +66,10 @@ figma.ui.onmessage = async (message) => {
     component.y = 0;
     return component;
   });
+
+  Object.keys(propertyValues).forEach((k) =>
+    propertyValues[k].forEach((value) => value.remove())
+  );
 
   figma.viewport.scrollAndZoomIntoView([
     figma.combineAsVariants(components, figma.currentPage),
