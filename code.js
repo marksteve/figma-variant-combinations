@@ -8,6 +8,28 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 figma.showUI(__html__, { width: 200, height: 100 });
+function rasterize(node, scale) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { width, height } = node;
+        const frame = figma.createFrame();
+        frame.name = node.name;
+        frame.resizeWithoutConstraints(width, height);
+        frame.x = 0;
+        frame.y = 0;
+        const data = yield node.exportAsync({
+            format: "PNG",
+            constraint: { type: "SCALE", value: scale },
+        });
+        const image = figma.createImage(data);
+        const paint = {
+            type: "IMAGE",
+            scaleMode: "FIT",
+            imageHash: image.hash,
+        };
+        frame.fills = [paint];
+        return frame;
+    });
+}
 figma.ui.onmessage = (message) => __awaiter(this, void 0, void 0, function* () {
     const scale = parseFloat(message.scale);
     const properties = [];
@@ -19,7 +41,7 @@ figma.ui.onmessage = (message) => __awaiter(this, void 0, void 0, function* () {
         const property = node.name;
         const values = node.children;
         properties.push(property);
-        propertyValues[property] = values;
+        propertyValues[property] = yield Promise.all(values.map((value) => rasterize(value, scale)));
     }
     function getVariants(i = 0, prev = []) {
         if (i === properties.length) {
@@ -28,35 +50,21 @@ figma.ui.onmessage = (message) => __awaiter(this, void 0, void 0, function* () {
         const property = properties[i];
         return propertyValues[property].flatMap((value) => getVariants(i + 1, [...prev, value]));
     }
-    const components = yield Promise.all(getVariants().map((variant) => __awaiter(this, void 0, void 0, function* () {
+    const components = getVariants().map((variant) => {
         const component = figma.createComponent();
         let { width, height } = variant[0];
         width *= scale;
         height *= scale;
         component.resizeWithoutConstraints(width, height);
         for (const value of variant) {
-            const node = figma.createFrame();
-            node.resizeWithoutConstraints(width, height);
-            node.x = 0;
-            node.y = 0;
-            const data = yield value.exportAsync({
-                format: "PNG",
-                constraint: { type: "SCALE", value: scale },
-            });
-            const image = figma.createImage(data);
-            const paint = {
-                type: "IMAGE",
-                scaleMode: "FIT",
-                imageHash: image.hash,
-            };
-            node.fills = [paint];
-            component.appendChild(node);
+            const clone = value.clone();
+            component.appendChild(clone);
         }
         component.name = variant.map((value) => value.name).join(" / ");
         component.x = 0;
         component.y = 0;
         return component;
-    })));
+    });
     figma.viewport.scrollAndZoomIntoView([
         figma.combineAsVariants(components, figma.currentPage),
     ]);
