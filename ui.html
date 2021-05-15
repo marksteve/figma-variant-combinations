@@ -15,17 +15,12 @@
   }
 </style>
 <div class="ui">
-  <div class="row">
-    <strong>Scale</strong>
-    <input type="number" min="1" max="10" step="1" value="1">
-  </div>
   <button onclick="generate()">
     Generate variants
   </button>
 </div>
 <script>
   function generate() {
-    const scale = document.querySelector("input").value
-    parent.postMessage({ pluginMessage: { scale } }, '*')
+    parent.postMessage({ pluginMessage: {} }, '*')
   }
 </script>

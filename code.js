@@ -8,42 +8,30 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 figma.showUI(__html__, { width: 200, height: 100 });
-function rasterize(node, scale) {
-    return __awaiter(this, void 0, void 0, function* () {
-        let { width, height } = node;
-        width *= scale;
-        height *= scale;
-        const frame = figma.createFrame();
-        frame.name = node.name;
-        frame.resizeWithoutConstraints(width, height);
-        frame.x = 0;
-        frame.y = 0;
-        const data = yield node.exportAsync({
-            format: "PNG",
-            constraint: { type: "SCALE", value: scale },
-        });
-        const image = figma.createImage(data);
-        const paint = {
-            type: "IMAGE",
-            scaleMode: "FIT",
-            imageHash: image.hash,
-        };
-        frame.fills = [paint];
-        return frame;
-    });
-}
 figma.ui.onmessage = (message) => __awaiter(this, void 0, void 0, function* () {
-    const scale = parseFloat(message.scale);
     const properties = [];
     const propertyValues = {};
     const selectedIds = figma.currentPage.selection
         .filter((node) => node.type === "GROUP")
         .map((node) => node.id);
+    let minX = Number.MAX_VALUE;
+    let minY = Number.MAX_VALUE;
     for (const node of figma.currentPage.children.filter((node) => ~selectedIds.indexOf(node.id))) {
         const property = node.name;
+        minX = Math.min(node.x, minX);
+        minY = Math.min(node.y, minY);
         const values = node.children;
         properties.push(property);
-        propertyValues[property] = yield Promise.all(values.map((value) => rasterize(value, scale)));
+        propertyValues[property] = values.map((value) => {
+            const clone = value.clone();
+            clone.setPluginData("rect", JSON.stringify({
+                x: node.x,
+                y: node.y,
+                width: node.width,
+                height: node.height,
+            }));
+            return clone;
+        });
     }
     function getVariants(i = 0, prev = []) {
         if (i === properties.length) {
@@ -52,14 +40,20 @@ figma.ui.onmessage = (message) => __awaiter(this, void 0, void 0, function* () {
         const property = properties[i];
         return propertyValues[property].flatMap((value) => getVariants(i + 1, [...prev, value]));
     }
+    let maxWidth = 0;
+    let maxHeight = 0;
     const components = getVariants().map((variant) => {
         const component = figma.createComponent();
-        const { width, height } = variant[0];
-        component.resizeWithoutConstraints(width, height);
         for (const value of variant) {
+            const { x, y, width, height } = JSON.parse(value.getPluginData("rect"));
             const clone = value.clone();
+            clone.x = x - minX;
+            clone.y = y - minY;
+            maxWidth = Math.max(clone.x + width, maxWidth);
+            maxHeight = Math.max(clone.y + height, maxHeight);
             component.appendChild(clone);
         }
+        component.resizeWithoutConstraints(maxWidth, maxHeight);
         component.name = variant.map((value) => value.name).join(" / ");
         component.x = 0;
         component.y = 0;
